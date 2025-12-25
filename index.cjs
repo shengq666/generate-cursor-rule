@@ -257,72 +257,53 @@ function buildTechFingerprint(ctx, deps) {
 
 function buildL0() {
   return `
-# 🚨 L0 · 核心行为约束（最高优先级）
+# 🚨 L0 · 核心行为约束
 
 ## 🎯 沟通模式
-- 你是我的一线开发同事，不是导师也不是助理
-- **对话模式**：直接给出解决方案，不要教学式讲解
-- **输出格式**：代码优先，解释在后（如有必要）
-- **问题解决**：先给解决方案，再问是否需要解释
+- 直接给出解决方案，代码优先，解释在后
+- 先给方案，再问是否需要解释
 
 ## ⚡ 效率准则
-- 默认一次性输出完整、可直接运行的代码片段
-- 拒绝：
-  - 伪代码（除非明确要求）
-  - TODO
-  - "// ... 省略"
-  - "这里写逻辑" 这种占位符
-  - 不完整的示例代码
-- 代码必须可直接复制粘贴运行，且无编译错误
+- 一次性输出完整、可直接运行的代码
+- 禁止：伪代码、TODO、"// ... 省略"、占位符、不完整示例
+- 代码必须可直接运行，无编译错误
 
 ## 🛡️ 质量底线
-- 所有代码必须是生产级别质量、默认代码会被长期维护
+- 生产级别质量，代码会被长期维护
 `.trim()
 }
 
 function buildL1Common(ctx) {
   const isTS = ctx.language === 'TypeScript'
   return `
-# 💎 L1 · 工程质量红线（通用）
+# 💎 L1 · 工程质量红线
 
 ## 🟥 架构级红线
-- 严格遵守技术栈指纹，禁止引入不在指纹中的 UI / 构建工具 / 状态方案
-- **禁止混用**不兼容的技术方案（如 Vue2 + Vue3 语法）
-- 新代码必须与现有项目架构保持一致性
+- 严格遵守技术栈指纹，禁止引入不在指纹中的**架构级技术方案**（UI框架、状态管理、构建工具、CSS预处理器等）
+- **允许引入工具库**（如日期处理、工具函数、特定功能库等），但需评估必要性、维护性和与现有技术栈的兼容性
+- 禁止混用不兼容方案（如 Vue2 + Vue3 语法）
+- 新代码必须与现有架构保持一致
 
 ## 🔧 代码正确性
-- 显式处理异常与边界情况、所有异步操作必须有 try-catch 或 .catch()
+- 显式处理异常与边界情况，异步操作必须有 try-catch 或 .catch()
 - API 调用必须包含错误处理和加载状态
 - 敏感操作必须有确认机制
 
 ## 📏 可维护性标准
-- 结构分层清晰，副作用集中
-- 避免过度抽象与炫技
+- 结构分层清晰，副作用集中，避免过度抽象
 - 单一职责、清晰命名、低耦合
-- **长度限制**：
-  - 函数：不超过 150 行
-  - 组件：不超过 300 行（若复杂可放宽）
-  - 文件：不超过 500 行（若复杂可放宽）
-- **复杂度限制**：
-  - 嵌套不超过 3 层
-  - 函数参数不超过 5 个
-  - 条件分支不超过 5 个
+- **限制**：函数≤150行，组件≤300行，文件≤500行，嵌套≤3层，参数≤5个，分支≤5个
 
 ## 📝 ${isTS ? 'TypeScript' : 'JavaScript'} 规范  
 ${
   isTS
-    ? `### TypeScript 严格规范
-- 禁止使用 \`any\` 类型（除非第三方库类型缺失或历史代码需要兼容）
+    ? `- 禁止使用 \`any\`（除非第三方库类型缺失或历史代码兼容）
 - 所有公共 API 必须有类型定义
-- 优先使用 \`interface\` 而不是 \`type\`
-- 使用泛型提高代码复用性
-- 枚举值必须使用 \`const enum\`
-- 使用类型保护而不是类型断言
+- 优先使用 \`interface\`，使用泛型，枚举用 \`const enum\`
+- 使用类型保护而非类型断言
 `
-    : `
-- 复杂函数必须使用 JSDoc 注释
-- 使用 ES6+ 语法
-- 优先使用 async await 而不是回调
+    : `- 复杂函数使用 JSDoc 注释
+- 使用 ES6+ 语法，优先 async/await
 `
 }
 
@@ -332,58 +313,46 @@ ${
 function buildFrameworkRules(ctx) {
   if (ctx.framework === 'uni-app') {
     const platformInfo = ctx.platformName 
-      ? `- **目标平台**: ${ctx.platformName} (${ctx.platform})`
-      : '- **目标平台**: 未识别（请检查 package.json scripts）'
+      ? `- 目标平台: ${ctx.platformName} (${ctx.platform})`
+      : '- 目标平台: 未识别（检查 package.json scripts）'
     
     const vueRules = ctx.major >= 3 
-      ? `- 遵循 Vue 3 最佳实践
-- **语法规范**: 必须使用 \`<script setup lang="ts">\`。
-- **逻辑复用**: 优先提取为 Composable (\`useXxx.ts\`)。
-- 禁止使用 this.xxx`
-      : `- 遵循 Vue 2 最佳实践
-- 必须使用 Options API`
+      ? `- Vue 3: 使用 \`<script setup>\`，优先 Composable，禁止 this`
+      : `- Vue 2: 使用 Options API`
 
     return `
 # 🧩 Uni-App 专属约束
 ${platformInfo}
-- 基于 Vue ${ctx.major}，遵循 uni-app 开发规范
+- 基于 Vue ${ctx.major}，遵循 uni-app 规范
 ${vueRules}
-- **API 使用**: 必须使用 uni.* API（如 uni.request、uni.navigateTo 等），禁止使用浏览器原生 API
-- **组件使用**: 优先使用 uni-app 内置组件（view、text、image 等）
-- **平台差异**: 注意不同平台的 API 差异和限制
-- **条件编译**: 如需平台特定代码，使用条件编译 \`// #ifdef MP-WEIXIN\` 等
-- **路由导航**: 使用 uni.navigateTo / uni.redirectTo / uni.switchTab 等，不使用 vue-router
-- **生命周期**: 使用 uni-app 生命周期（onLoad、onShow 等），而非 Vue 生命周期
+- 必须使用 uni.* API（uni.request、uni.navigateTo 等），禁止浏览器原生 API
+- 优先使用 uni-app 内置组件（view、text、image 等）
+- 注意平台差异，使用条件编译 \`// #ifdef MP-WEIXIN\`
+- 路由使用 uni.navigateTo/redirectTo/switchTab，不使用 vue-router
+- 生命周期使用 onLoad/onShow 等，而非 Vue 生命周期
 `.trim()
   }
 
   if (ctx.framework === 'vue' && ctx.major === 2) {
     return `
 # 🧩 Vue 2 专属约束
-- 遵循 Vue 2 最佳实践
-- 必须使用 Options API
-
+- 遵循 Vue 2 最佳实践，必须使用 Options API
 `.trim()
   }
 
   if (ctx.framework === 'vue' && ctx.major >= 3) {
     return `
 # 🧩 Vue 3 专属约束
-- 遵循 Vue 3 最佳实践
-- 禁止使用 Vue 2 专属特性
-- **语法规范**: 必须使用 \`<script setup lang="ts">\`。
-- **逻辑复用**: 优先提取为 Composable (\`useXxx.ts\`)。
-- 禁止使用 this.xxx
+- 遵循 Vue 3 最佳实践，禁止 Vue 2 特性
+- 必须使用 \`<script setup>\`，优先 Composable，禁止 this
 `.trim()
   }
 
   if (ctx.framework === 'react') {
     return `
 # ⚛️ React 专属约束
-- 遵循 React 最佳实践
-- 必须使用 Function Component + Hooks
-- 优先使用 Hooks 封装业务逻辑
-- 禁止使用 Class Component
+- 遵循 React 最佳实践，必须使用 Function Component + Hooks
+- 优先使用 Hooks 封装业务逻辑，禁止 Class Component
 `.trim()
   }
 
@@ -392,15 +361,11 @@ ${vueRules}
 
 function buildL3() {
   return `
-# 🎨 L3 · 代码风格与偏好（建议性）
-- 非必要不引入新依赖
-- 遵循《代码整洁之道》
-- 避免过度封装（KISS）
-- 优先使用纯函数组件
-- 关注点分离：逻辑/视图/样式
-- 使用最佳实践：避免重复代码、合理使用缓存、优化性能
+# 🎨 L3 · 代码风格与偏好
+- 非必要不引入新依赖，避免过度封装（KISS）
+- 优先使用纯函数组件，关注点分离（逻辑/视图/样式）
+- 避免重复代码、合理使用缓存、优化性能
 - 与现有代码风格保持一致
-
 `.trim()
 }
 
@@ -421,6 +386,7 @@ const DOC_REGISTRY = {
     16: 'https://react.dev/reference/react',
     17: 'https://react.dev/reference/react',
     18: 'https://react.dev/reference/react',
+    19: 'https://react.dev/reference/react',
   },
   antd: {
     4: 'https://4x.ant.design/components/overview-cn/',
@@ -464,8 +430,8 @@ const DOC_REGISTRY = {
     2: 'https://pinia.vuejs.org/zh/',
   },
   redux: {
-    4: 'https://redux.js.org/introduction/getting-started',
-    5: 'https://redux.js.org/introduction/getting-started',
+    4: 'https://redux.js.org/',
+    5: 'https://redux.js.org/',
   },
   zustand: {
     4: 'https://zustand-demo.pmnd.rs/',
@@ -528,58 +494,45 @@ function buildAntiHallucination(fingerprint) {
   const docs = buildDocListFromFingerprint(fingerprint)
 
   return `
-# 🛡️ L4 · 文档与防幻觉（Anti-Hallucination）
+# 🛡️ L4 · 文档与防幻觉
 
 ## 🚨 幻觉高风险声明
 - UI 组件库、构建工具是 AI 幻觉最高发区域
-- **必须严格按主版本文档生成代码**
-- 禁止跨版本、跨框架“凭经验写代码”
+- 必须严格按主版本文档生成代码，禁止跨版本、跨框架"凭经验写代码"
 
-## 📚 官方文档（版本感知，唯一可信来源）
+## 📚 官方文档（唯一可信来源）
 ${docs || '- 未识别到可用官方文档'}
 
 ## ⛔ 强制约束
-- 若 API 未出现在以上文档中，视为不可用
-- 禁止使用博客、Issue、旧项目代码作为依据
-- 当记忆与文档冲突时，以文档为准
-- 当文档与项目技术栈冲突时，以「技术栈指纹」为准
+- API 使用优先参考以上官方文档，未出现在文档中的 API 需谨慎验证
+- 官方文档不足时，可参考博客、Issue、社区讨论，但必须：
+  - 验证与项目技术栈版本匹配
+  - 确认方案与官方文档不冲突
+  - 避免使用过时或不匹配的解决方案
+- 记忆与文档冲突时，以文档为准；文档与技术栈冲突时，以技术栈指纹为准
 `.trim()
 }
 
 function buildOpenSourceReference() {
   return `
-# 🌱 L5 · 开源代码参考（Controlled Inspiration）
+# 🌱 L5 · 开源代码参考
 
 ## 🎯 目标
-在**不引入新依赖、不跨版本、不破坏项目架构**的前提下，可参考社区高质量开源项目的**代码风格、模块划分、可维护性设计**，以提升生成代码的工程质量。
+在不引入新依赖、不跨版本、不破坏架构的前提下，可参考开源项目的代码风格、模块划分、可维护性设计。
 
-## ✅ 允许参考的内容
-- 模块拆分方式
-- 函数职责边界
-- 命名习惯与可读性
-- 错误处理模式
-- Hooks / Composables 的设计思想
-- 工具函数的纯度与复用方式
+## ✅ 允许参考
+- 模块拆分、函数职责、命名习惯、错误处理模式
+- Hooks/Composables 设计思想、工具函数的纯度与复用
 
-## ⛔ 禁止参考的内容
-- 未在项目技术栈指纹中的库或框架
-- 跨主版本的 API 写法
-- 未在 L4 官方文档中出现的接口
+## ⛔ 禁止参考
+- 未在技术栈指纹中的库/框架、跨主版本 API、未在 L4 文档中的接口
 - 直接复制粘贴完整实现
 
-## 📌 使用约束（非常重要）
-- 所有 API 使用必须通过 **L4 文档校验**
-- 所有代码风格必须符合 **L3 工程规范**
-- 当开源实现与项目规范冲突时：
-  **以项目规范为准，而非开源代码**
+## 📌 使用约束
+- 所有 API 必须通过 L4 文档校验，代码风格符合 L3 规范
+- 开源实现与项目规范冲突时，以项目规范为准
 
-## ⭐ 推荐参考的开源项目（思想层面）
-- Vue 官方示例与 RFC（结构设计）
-- Vant / Ant Design / Element 官方源码（组件实现思想与组织方式）
-- VueUse / ahooks（Hooks / Composables 设计）
-- Axios / TanStack（边界处理与健壮性）
-
-> 仅允许“借鉴设计思想”，禁止“照搬实现细节”
+> 仅允许"借鉴设计思想"，禁止"照搬实现细节"
 `.trim()
 }
 
@@ -604,7 +557,7 @@ function generate() {
 
   const rules = `
 # Role
-你是一名资深前端工程师，是我的同事，而不是老师。
+你是一名资深前端工程师，是我的同事。
 
 ${buildL0()}
 

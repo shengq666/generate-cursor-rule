@@ -28,8 +28,78 @@ function getMajor(version) {
  * 项目上下文识别
  * ========================================================== */
 
-function detectContext(deps) {
+/** 检测 uni-app 项目 */
+function detectUniApp(deps) {
+  // 检测 uni-app 相关依赖
+  const hasUniApp = 
+    deps['@dcloudio/uni-app'] ||
+    deps['@dcloudio/uni-h5'] ||
+    deps['@dcloudio/uni-mp-weixin'] ||
+    deps['@dcloudio/uni-mp-alipay'] ||
+    deps['@dcloudio/uni-mp-baidu'] ||
+    deps['@dcloudio/uni-mp-toutiao'] ||
+    deps['@dcloudio/uni-mp-qq'] ||
+    deps['@dcloudio/uni-mp-xhs'] ||
+    deps['@dcloudio/vue-cli-plugin-uni'] ||
+    deps['@dcloudio/vite-plugin-uni']
+
+  if (!hasUniApp) return null
+
+  // 获取 Vue 版本（uni-app 基于 Vue）
+  const vueVersion = deps.vue || deps['@dcloudio/uni-mp-vue']
+  const major = vueVersion ? getMajor(vueVersion) : 2 // 默认 Vue 2
+
+  return {
+    isUniApp: true,
+    vueMajor: major,
+  }
+}
+
+/** 从 package.json scripts 中识别 uni-app 目标平台 */
+function detectUniAppPlatform(pkg) {
+  if (!pkg.scripts) return null
+
+  const scripts = Object.values(pkg.scripts).join(' ')
+  
+  // 平台映射
+  const platformMap = {
+    'mp-weixin': '微信小程序',
+    'mp-alipay': '支付宝小程序',
+    'mp-baidu': '百度小程序',
+    'mp-toutiao': '字节跳动小程序',
+    'mp-qq': 'QQ小程序',
+    'mp-xhs': '小红书小程序',
+    'h5': 'H5',
+    'app': 'App',
+    'app-plus': 'App',
+    'quickapp': '快应用',
+  }
+
+  // 从 scripts 中提取平台信息
+  for (const [key, name] of Object.entries(platformMap)) {
+    if (scripts.includes(key) || scripts.includes(`UNI_PLATFORM=${key}`)) {
+      return { platform: key, platformName: name }
+    }
+  }
+
+  return null
+}
+
+function detectContext(deps, pkg) {
   const isTS = deps.typescript || fs.existsSync('tsconfig.json')
+  
+  // 优先检测 uni-app
+  const uniAppInfo = detectUniApp(deps)
+  if (uniAppInfo) {
+    const platformInfo = detectUniAppPlatform(pkg)
+    return {
+      framework: 'uni-app',
+      major: uniAppInfo.vueMajor,
+      language: isTS ? 'TypeScript' : 'JavaScript',
+      platform: platformInfo?.platform || null,
+      platformName: platformInfo?.platformName || null,
+    }
+  }
 
   if (deps.vue) {
     return {
@@ -117,15 +187,22 @@ function detectCssSolution(deps) {
 
 /** 状态 / 数据持久化 */
 function detectStateSolution(deps) {
-  if (deps.pinia) return 'pinia'
-  if (deps.vuex) return 'vuex'
-  if (deps.redux) return 'redux'
-  if (deps.zustand) return 'zustand'
+  if (deps.pinia) return `pinia${getMajor(deps.pinia)}`
+  if (deps.vuex) return `vuex${getMajor(deps.vuex)}`
+  if (deps.redux) return `redux${getMajor(deps.redux)}`
+  if (deps.zustand) return `zustand${getMajor(deps.zustand)}`
   return null
 }
 
 /** HTTP 请求方案 */
-function detectHttpClient(deps) {
+function detectHttpClient(deps, ctx) {
+  // uni-app 项目优先使用 uni.request
+  if (ctx && ctx.framework === 'uni-app') {
+    // 如果明确使用了 axios，则使用 axios，否则使用 uni.request
+    if (deps.axios) return 'axios'
+    return 'uni-request'
+  }
+  
   if (deps.axios) return 'axios'
   if (deps['@tanstack/query']) return 'react-query'
   return 'fetch'
@@ -139,13 +216,19 @@ function buildTechFingerprint(ctx, deps) {
   const parts = []
 
   // 主框架
-  if (ctx.framework === 'vue') {
+  if (ctx.framework === 'uni-app') {
+    parts.push(`uni-app(vue${ctx.major})`)
+    // 添加目标平台信息
+    if (ctx.platform) {
+      parts.push(`platform:${ctx.platform}`)
+    }
+  } else if (ctx.framework === 'vue') {
     parts.push(`vue${ctx.major}`)
   } else if (ctx.framework === 'react') {
-    parts.push('react')
+    parts.push(`react${ctx.major}`)
   }
 
-  // UI
+  // UI（uni-app 项目通常使用 uni-ui 或 uView，但也可以使用其他 UI 库）
   const ui = detectUILib(deps)
   if (ui) parts.push(ui)
 
@@ -162,7 +245,7 @@ function buildTechFingerprint(ctx, deps) {
   if (state) parts.push(state)
 
   // HTTP
-  const http = detectHttpClient(deps)
+  const http = detectHttpClient(deps, ctx)
   if (http) parts.push(http)
 
   return parts.join(' + ')
@@ -247,6 +330,33 @@ ${
 }
 
 function buildFrameworkRules(ctx) {
+  if (ctx.framework === 'uni-app') {
+    const platformInfo = ctx.platformName 
+      ? `- **目标平台**: ${ctx.platformName} (${ctx.platform})`
+      : '- **目标平台**: 未识别（请检查 package.json scripts）'
+    
+    const vueRules = ctx.major >= 3 
+      ? `- 遵循 Vue 3 最佳实践
+- **语法规范**: 必须使用 \`<script setup lang="ts">\`。
+- **逻辑复用**: 优先提取为 Composable (\`useXxx.ts\`)。
+- 禁止使用 this.xxx`
+      : `- 遵循 Vue 2 最佳实践
+- 必须使用 Options API`
+
+    return `
+# 🧩 Uni-App 专属约束
+${platformInfo}
+- 基于 Vue ${ctx.major}，遵循 uni-app 开发规范
+${vueRules}
+- **API 使用**: 必须使用 uni.* API（如 uni.request、uni.navigateTo 等），禁止使用浏览器原生 API
+- **组件使用**: 优先使用 uni-app 内置组件（view、text、image 等）
+- **平台差异**: 注意不同平台的 API 差异和限制
+- **条件编译**: 如需平台特定代码，使用条件编译 \`// #ifdef MP-WEIXIN\` 等
+- **路由导航**: 使用 uni.navigateTo / uni.redirectTo / uni.switchTab 等，不使用 vue-router
+- **生命周期**: 使用 uni-app 生命周期（onLoad、onShow 等），而非 Vue 生命周期
+`.trim()
+  }
+
   if (ctx.framework === 'vue' && ctx.major === 2) {
     return `
 # 🧩 Vue 2 专属约束
@@ -303,7 +413,13 @@ const DOC_REGISTRY = {
     2: 'https://v2.cn.vuejs.org/v2/guide/',
     3: 'https://cn.vuejs.org/guide/introduction.html',
   },
+  'uni-app': {
+    2: 'https://uniapp.dcloud.net.cn/',
+    3: 'https://uniapp.dcloud.net.cn/',
+  },
   react: {
+    16: 'https://react.dev/reference/react',
+    17: 'https://react.dev/reference/react',
     18: 'https://react.dev/reference/react',
   },
   antd: {
@@ -337,9 +453,49 @@ const DOC_REGISTRY = {
   axios: {
     1: 'https://axios-http.com/docs/intro',
   },
+  'uni-request': {
+    1: 'https://uniapp.dcloud.net.cn/api/request/request.html',
+  },
+  vuex: {
+    3: 'https://v3.vuex.vuejs.org/zh/',
+    4: 'https://vuex.vuejs.org/zh/',
+  },
+  pinia: {
+    2: 'https://pinia.vuejs.org/zh/',
+  },
+  redux: {
+    4: 'https://redux.js.org/introduction/getting-started',
+    5: 'https://redux.js.org/introduction/getting-started',
+  },
+  zustand: {
+    4: 'https://zustand-demo.pmnd.rs/',
+  },
 }
 
 function parseLibAndVersion(part) {
+  // 处理 uni-app(vue2) 格式
+  const uniAppMatch = part.match(/^uni-app\(vue(\d+)\)$/)
+  if (uniAppMatch) {
+    return {
+      name: 'uni-app',
+      major: Number(uniAppMatch[1]),
+    }
+  }
+
+  // 处理 platform:xxx 格式（跳过，不生成文档链接）
+  if (part.startsWith('platform:')) {
+    return null
+  }
+
+  // 处理无版本号的库（如 uni-request），使用默认版本 1
+  if (part === 'uni-request') {
+    return {
+      name: 'uni-request',
+      major: 1,
+    }
+  }
+
+  // 处理标准格式：libname2
   const match = part.match(/^([a-zA-Z-]+)(\d+)$/)
   if (!match) return null
 
@@ -443,7 +599,7 @@ function generate() {
     ...(pkg.devDependencies || {}),
   }
 
-  const ctx = detectContext(deps)
+  const ctx = detectContext(deps, pkg)
   const fingerprint = buildTechFingerprint(ctx, deps)
 
   const rules = `
